@@ -1,0 +1,57 @@
+salesorderID = salesorder.get("salesorder_id");
+salesorderdate = salesorder.get("date").toDate();
+dc = organization.get("data_center_extension");
+organizationID = organization.get("organization_id");
+sodet = invokeurl
+[
+	url :"https://inventory.zoho" + dc + "/api/v1/salesorders/" + salesorderID + "?organization_id=" + organizationID
+	type :GET
+	connection:"zom"
+];
+if(!sodet.get("salesorder").get("is_dropshipped").equalsIgnoreCase("true"))
+{
+	socf = salesorder.get("custom_fields");
+	addid = sodet.get("salesorder").get("shipping_address_id");
+	info "Shipping Address ID is" + " " + addid;
+	for each  c in socf
+	{
+		if(c.get("data_type").equalsIgnoreCase("lookup") && c.get("related_entity").equalsIgnoreCase("vendor"))
+		{
+			venid = c.get("value");
+		}
+	}
+	info "Vendor ID is" + " " + venid;
+	lines = salesorder.get("line_items");
+	blis = list();
+	for each  l in lines
+	{
+		bmap = Map();
+		bmap.put("item_id",l.get("item_id"));
+		bmap.put("quantity",l.get("quantity"));
+		bmap.put("tax_id",l.get("tax_id"));
+		bmap.put("salesorder_item_id",l.get("line_item_id"));
+		blis.add(bmap);
+	}
+	jmap = Map();
+	jmap.put("line_items",blis);
+	jmap.put("vendor_id",venid);
+	jmap.put("date",salesorderdate);
+	jmap.put("delivery_customer_id",salesorder.get("customer_id"));
+	jmap.put("delivery_customer_address_id",addid);
+	jmap.put("is_drop_shipment","true");
+	json = Map();
+	json.put("JSONString",jmap);
+	info json;
+	bpo = invokeurl
+	[
+		url :"https://inventory.zoho" + dc + "/api/v1/purchaseorders?organization_id=" + organizationID
+		type :POST
+		parameters:json
+		connection:"zom"
+	];
+	info bpo.get("message");
+}
+else
+{
+	info "A Drop Shipment Purchase Order was already created for this Sales Order";
+}
